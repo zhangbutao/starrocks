@@ -419,8 +419,12 @@ public class Authorizer {
 
     public static void checkWarehouseAction(ConnectContext context, String name,
                                             PrivilegeType privilegeType) throws AccessDeniedException {
-        getInstance().getAccessControlOrDefault(InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME)
-                .checkWarehouseAction(context, name, privilegeType);
+        // Any user has an implicit usage permission on the default_warehouse
+        Warehouse warehouse = GlobalStateMgr.getCurrentState().getWarehouseMgr().getWarehouse(name);
+        if (warehouse.getId() != WarehouseManager.DEFAULT_WAREHOUSE_ID) {
+            getInstance().getAccessControlOrDefault(InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME)
+                    .checkWarehouseAction(currentUser, roleIds, name, privilegeType);
+        }
     }
 
     public static void checkAnyActionOnWarehouse(ConnectContext context, String name)
