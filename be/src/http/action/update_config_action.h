@@ -39,14 +39,15 @@
 #include <unordered_map>
 
 #include "http/http_handler.h"
+#include "http/http_handler_with_auth.h"
 #include "runtime/exec_env.h"
 
 namespace starrocks {
 
 // Update BE config.
-class UpdateConfigAction : public HttpHandler {
+class UpdateConfigAction : public HttpHandlerWithAuth {
 public:
-    explicit UpdateConfigAction(ExecEnv* exec_env) : _exec_env(exec_env) { _instance.store(this); }
+    explicit UpdateConfigAction(ExecEnv* exec_env) :  HttpHandlerWithAuth(exec_env), _exec_env(exec_env) { _instance.store(this); }
     ~UpdateConfigAction() override = default;
 
     void handle(HttpRequest* req) override;

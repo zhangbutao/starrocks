@@ -2223,6 +2223,46 @@ struct TRefreshConnectionsResponse {
     1: optional Status.TStatus status;
 }
 
+enum TPrivilegeObject {
+    SYSTEM = 1,
+    CATALOG = 2,
+    DATABASE = 3,
+    TABLE = 4,
+    COLUMNS = 5,
+    RESOURSE = 6
+}
+
+struct TPrivilegeControl {
+    1: required TPrivilegeObject priv_object
+    2: optional string catalog
+    3: optional string db
+    4: optional string tbl
+    5: optional set<string> cols
+    6: optional string res
+}
+
+enum TPrivilegeType {
+    GRANT = 1,
+    ALTER = 2,
+    USAGE = 3,
+    OPERATOR = 4,
+    DROP = 5
+}
+
+struct TCheckAuthRequest {
+    1: optional string cluster
+    2: required string user
+    3: required string passwd
+    4: optional string user_ip
+    5: optional TPrivilegeControl priv_control
+    6: optional TPrivilegeType priv_type
+    7: optional i64 thrift_rpc_timeout_ms
+}
+
+struct TCheckAuthResult {
+    1: required Status.TStatus status
+}
+
 service FrontendService {
     TGetDbsResult getDbNames(1:TGetDbsParams params)
     TGetTablesResult getTableNames(1:TGetTablesParams params)
@@ -2371,5 +2411,7 @@ service FrontendService {
     TDynamicTabletJobsResponse getDynamicTabletJobsInfo(1: TDynamicTabletJobsRequest request)
 
     TRefreshConnectionsResponse refreshConnections(1: TRefreshConnectionsRequest request)
+
+    TCheckAuthResult checkAuth(1: TCheckAuthRequest request)
 }
 

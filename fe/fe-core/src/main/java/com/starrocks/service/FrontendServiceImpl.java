@@ -187,6 +187,8 @@ import com.starrocks.thrift.TBatchReportExecStatusParams;
 import com.starrocks.thrift.TBatchReportExecStatusResult;
 import com.starrocks.thrift.TBeginRemoteTxnRequest;
 import com.starrocks.thrift.TBeginRemoteTxnResponse;
+import com.starrocks.thrift.TCheckAuthRequest;
+import com.starrocks.thrift.TCheckAuthResult;
 import com.starrocks.thrift.TClusterSnapshotJobsRequest;
 import com.starrocks.thrift.TClusterSnapshotJobsResponse;
 import com.starrocks.thrift.TClusterSnapshotsRequest;
@@ -318,6 +320,9 @@ import com.starrocks.thrift.TOlapTablePartitionParam;
 import com.starrocks.thrift.TPartitionMeta;
 import com.starrocks.thrift.TPartitionMetaRequest;
 import com.starrocks.thrift.TPartitionMetaResponse;
+import com.starrocks.thrift.TPrivilegeControl;
+import com.starrocks.thrift.TPrivilegeObject;
+import com.starrocks.thrift.TPrivilegeType;
 import com.starrocks.thrift.TQueryStatisticsInfo;
 import com.starrocks.thrift.TRefreshConnectionsRequest;
 import com.starrocks.thrift.TRefreshConnectionsResponse;
@@ -401,6 +406,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import static com.starrocks.sql.analyzer.Authorizer.checkAnyActionOnCatalog;
+import static com.starrocks.sql.analyzer.Authorizer.checkDbAction;
+import static com.starrocks.sql.analyzer.Authorizer.checkSystemAction;
+import static com.starrocks.sql.analyzer.Authorizer.checkTableAction;
 import static com.starrocks.thrift.TStatusCode.NOT_IMPLEMENTED_ERROR;
 import static com.starrocks.thrift.TStatusCode.OK;
 import static com.starrocks.thrift.TStatusCode.RUNTIME_ERROR;
@@ -3152,6 +3161,70 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     @Override
     public TDynamicTabletJobsResponse getDynamicTabletJobsInfo(TDynamicTabletJobsRequest params) {
         return GlobalStateMgr.getCurrentState().getDynamicTabletJobMgr().getAllJobsInfo();
+    }
+
+    public TCheckAuthResult checkAuth(TCheckAuthRequest request) throws TException {
+        TCheckAuthResult result = new TCheckAuthResult();
+        TStatus status = new TStatus(TStatusCode.OK);
+        result.setStatus(status);
+
+        // 1. check user and password
+        final String fullUserName = ClusterNamespace.getNameFromFullName(request.getUser());
+        UserIdentity userIdentity;
+        try {
+            BaseAction.ActionAuthorizationInfo authInfo = BaseAction.parseAuthInfo(
+                    fullUserName, request.getPasswd(), request.getUser_ip());
+            userIdentity = BaseAction.checkPassword(authInfo);
+        } catch (Exception e) {
+            LOG.warn("Failed to check TCheckAuthRequest [user: {}, host: {}]",
+                    request.user, request.getUser_ip(), e);
+            status.setStatus_code(TStatusCode.NOT_AUTHORIZED);
+            status.setError_msgs(Lists.newArrayList(e.getMessage(), "Please check that your user or password " +
+                    "is correct"));
+            return result;
+        }
+
+        // 2. check privilege
+        TPrivilegeType privType = request.getPriv_type();
+        if (privType == null) {
+            return result;
+        }
+        PrivilegeType privilegeType = getPrivilegeType(privType);
+        TPrivilegeControl privCtrl = request.getPriv_control();
+        TPrivilegeObject privObject = privCtrl.getPriv_object();
+        ConnectContext context = new ConnectContext();
+        context.setCurrentUserIdentity(userIdentity);
+        context.setCurrentRoleIds(userIdentity);
+        try {
+            if (privObject == TPrivilegeObject.SYSTEM) {
+                checkSystemAction(context, privilegeType);
+            } else if (privObject == TPrivilegeObject.CATALOG) {
+                checkAnyActionOnCatalog(context, privCtrl.getCatalog());
+            } else if (privObject == TPrivilegeObject.DATABASE) {
+                checkDbAction(context, privCtrl.getCatalog(), privCtrl.getDb(), privilegeType);
+            } else if (privObject == TPrivilegeObject.TABLE) {
+                checkTableAction(context, new TableName(privCtrl.getCatalog(), privCtrl.getDb(),
+                        privCtrl.getTbl()), privilegeType);
+            }
+        } catch (AccessDeniedException e) {
+            status.setStatus_code(TStatusCode.ANALYSIS_ERROR);
+            status.addToError_msgs("Permissions error");
+            return result;
+        }
+        return result;
+    }
+
+    private PrivilegeType getPrivilegeType(TPrivilegeType privType) {
+        if (privType == null) {
+            return null;
+        }
+        return switch (privType) {
+            case GRANT -> PrivilegeType.GRANT;
+            case ALTER -> PrivilegeType.ALTER;
+            case USAGE -> PrivilegeType.USAGE;
+            case OPERATOR -> PrivilegeType.OPERATE;
+            case DROP -> PrivilegeType.DROP;
+        };
     }
 
     @NotNull

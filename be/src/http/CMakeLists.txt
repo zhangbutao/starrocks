@@ -25,6 +25,7 @@ set(WEB_SERVER_FILES
   http_channel.cpp
   http_status.cpp
   http_parser.cpp
+  http_handler_with_auth.cpp
   http_stream_channel.cpp
   web_page_handler.cpp
   monitor_action.cpp

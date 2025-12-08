@@ -77,7 +77,7 @@ HttpServiceBE::HttpServiceBE(DataCache* cache_env, ExecEnv* env, int port, int n
         : _cache_env(cache_env),
           _env(env),
           _ev_http_server(new EvHttpServer(port, num_threads)),
-          _web_page_handler(new WebPageHandler(_ev_http_server.get())),
+          _web_page_handler(new WebPageHandler(_ev_http_server.get(), env)),
           _http_concurrent_limiter(new ConcurrentLimiter(config::be_http_num_workers - 1)) {}
 
 HttpServiceBE::~HttpServiceBE() {

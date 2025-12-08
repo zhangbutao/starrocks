@@ -1792,4 +1792,7 @@ CONF_Int32(llm_max_queue_size, "4096");
 CONF_Int32(llm_max_concurrent_queries, "8");
 
 CONF_Int32(llm_cache_size, "131072");
+
+// Determine whether to authenticate and authorize BE HTTP port requests.
+CONF_Bool(enable_http_auth, "true");
 } // namespace starrocks::config
